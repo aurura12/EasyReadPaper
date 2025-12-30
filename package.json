@@ -2,6 +2,7 @@
 	"name": "easy-read-paper",
 	"productName": "easy-read-paper",
 	"version": "1.0.0",
+	"icon": "src/assets/icon/app",
 	"description": "My Electron application description",
 	"main": ".vite/build/main.js",
 	"scripts": {
