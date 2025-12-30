@@ -6,6 +6,9 @@ module.exports = {
 	packagerConfig: {
 		asar: true,
 		icon: path.resolve(__dirname, 'src/assets/icon/app.ico'),
+		extraResource: [
+			path.resolve(__dirname, 'backend', 'dist', 'api_server.exe'), // 指向 backend/dist 下的 exe
+		],
 	},
 	rebuildConfig: {},
 	makers: [

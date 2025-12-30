@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import started from 'electron-squirrel-startup';
 
 // Try to force-disable GPU as early as possible to avoid spawning GPU process.
@@ -18,6 +19,41 @@ app.disableHardwareAcceleration();
 if (started) {
 	app.quit();
 }
+
+// --- 后端服务控制逻辑 ---
+let backendProcess = null;
+
+const startBackend = () => {
+	const isDev = !app.isPackaged;
+	let scriptPath;
+	let command;
+	let args = [];
+
+	if (isDev) {
+		// 开发模式：直接运行 python 脚本 (api.py 在 backend 目录)
+		// 在 Windows 上优先使用 `py` 启动器，否则使用 `python`
+		command = process.platform === 'win32' ? 'py' : 'python';
+		scriptPath = path.join(process.cwd(), 'backend', 'api.py');
+		args = [scriptPath];
+	} else {
+		// 生产模式：运行打包后的 exe
+		// 注意：你需要配置 electron-builder 将 api_server.exe 复制到 resources 目录
+		const exeName = 'api_server.exe';
+		scriptPath = path.join(process.resourcesPath, exeName);
+		command = scriptPath;
+	}
+
+	console.log(`正在启动后端服务: ${command} ${args.join(' ')}`);
+	backendProcess = spawn(command, args);
+
+	backendProcess.stdout.on('data', (data) => {
+		console.log(`Backend: ${data.toString()}`);
+	});
+
+	backendProcess.stderr.on('data', (data) => {
+		console.error(`Backend Error: ${data.toString()}`);
+	});
+};
 
 const createWindow = () => {
 	// Create the browser window.
@@ -46,6 +82,7 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+	// startBackend(); // 启动后端
 	createWindow();
 
 	// On OS X it's common to re-create a window in the app when the
@@ -55,6 +92,13 @@ app.whenReady().then(() => {
 			createWindow();
 		}
 	});
+});
+
+// 退出应用时杀掉 Python 进程
+app.on('will-quit', () => {
+	if (backendProcess) {
+		backendProcess.kill();
+	}
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common

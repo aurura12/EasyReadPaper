@@ -17,6 +17,14 @@
 		"name": "zhoujiaqi",
 		"email": "2411351557@qq.com"
 	},
+	"build": {
+		"extraResources": [
+			{
+				"from": "backend/dist/api_server.exe",
+				"to": "api_server.exe"
+			}
+		]
+	},
 	"license": "MIT",
 	"devDependencies": {
 		"@electron-forge/cli": "^7.10.2",
