@@ -58,8 +58,12 @@
 						</div>
 					</div>
 					<div class="result-actions">
-						<button class="import-all-btn" @click="addAllToWordbook">
-							一键导入全部
+						<button
+							class="import-all-btn"
+							:disabled="isAllAdded"
+							@click="addAllToWordbook"
+						>
+							{{ isAllAdded ? '已全部导入' : '一键导入全部' }}
 						</button>
 						<button class="reset-btn" @click="analysisResult = null">
 							返回
@@ -114,6 +118,13 @@ export default {
 			isAnalyzing: false,
 			analysisResult: null,
 		};
+	},
+	computed: {
+		isAllAdded() {
+			return (
+				this.analysisResult && this.analysisResult.every((item) => item.added)
+			);
+		},
 	},
 	created() {
 		const savedRecent = localStorage.getItem('recent_files');
@@ -534,6 +545,11 @@ export default {
 	cursor: pointer;
 	font-size: 14px;
 	font-weight: 500;
+}
+
+.import-all-btn:disabled {
+	background-color: #bdc3c7;
+	cursor: not-allowed;
 }
 
 .add-btn {
