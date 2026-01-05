@@ -27,6 +27,13 @@
 				<div class="word-content">
 					<div class="word-main">
 						<span class="word-text">{{ word.text }}</span>
+						<button
+							class="speak-btn"
+							@click="speakWord(word.text)"
+							title="点击发音"
+						>
+							🔊
+						</button>
 						<span class="word-translation">{{ word.translation }}</span>
 					</div>
 					<div class="word-date">添加于: {{ formatDate(word.timestamp) }}</div>
@@ -121,6 +128,12 @@ export default {
 			const d = new Date(ts);
 			return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 		},
+		speakWord(text) {
+			window.speechSynthesis.cancel(); // 播放前先停止之前的发音，防止堆积
+			const utterance = new SpeechSynthesisUtterance(text);
+			utterance.lang = 'en-US'; // 设置为美式英语发音
+			window.speechSynthesis.speak(utterance);
+		},
 	},
 };
 </script>
@@ -185,6 +198,21 @@ export default {
 	font-size: 1.1em;
 	margin-right: 12px;
 	color: #2c3e50;
+}
+
+.speak-btn {
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-size: 18px;
+	margin-right: 10px;
+	padding: 0;
+	vertical-align: middle;
+	transition: transform 0.1s;
+}
+
+.speak-btn:active {
+	transform: scale(0.9);
 }
 
 .word-translation {
