@@ -57,7 +57,14 @@
 							</button>
 						</div>
 					</div>
-					<button class="reset-btn" @click="analysisResult = null">返回</button>
+					<div class="result-actions">
+						<button class="import-all-btn" @click="addAllToWordbook">
+							一键导入全部
+						</button>
+						<button class="reset-btn" @click="analysisResult = null">
+							返回
+						</button>
+					</div>
 				</div>
 				<div v-else class="home-content">
 					<div class="recent-files">
@@ -245,6 +252,35 @@ export default {
 
 			// 更新 UI 状态
 			item.added = true;
+		},
+		addAllToWordbook() {
+			if (!this.analysisResult || this.analysisResult.length === 0) return;
+
+			const savedData = localStorage.getItem('my_wordbook_data');
+			let words = savedData ? JSON.parse(savedData) : [];
+			let count = 0;
+
+			this.analysisResult.forEach((item, index) => {
+				const exists = words.some(
+					(w) => w.text.toLowerCase() === item.word.toLowerCase()
+				);
+
+				if (!exists) {
+					words.push({
+						id: Date.now() + index, // 确保批量添加时 ID 唯一
+						text: item.word,
+						translation: item.translation,
+						timestamp: Date.now(),
+					});
+					count++;
+				}
+				item.added = true;
+			});
+
+			localStorage.setItem('my_wordbook_data', JSON.stringify(words));
+			alert(
+				count > 0 ? `成功导入 ${count} 个新单词！` : '所有单词已在单词本中'
+			);
 		},
 	},
 };
@@ -473,6 +509,12 @@ export default {
 	line-height: 1.4;
 }
 
+.result-actions {
+	display: flex;
+	gap: 16px;
+	margin-top: 10px;
+}
+
 .reset-btn {
 	padding: 8px 20px;
 	background-color: #3498db;
@@ -480,6 +522,18 @@ export default {
 	border: none;
 	border-radius: 4px;
 	cursor: pointer;
+	font-size: 14px;
+}
+
+.import-all-btn {
+	padding: 8px 20px;
+	background-color: #42b983;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 14px;
+	font-weight: 500;
 }
 
 .add-btn {
