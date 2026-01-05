@@ -127,6 +127,9 @@ export default {
 			const file = event.target.files[0];
 			if (!file) return;
 
+			// 获取真实路径 (Electron 环境下需要通过 webUtils 获取)
+			const filePath = window.electronAPI.getFilePath(file);
+
 			// 将新选择的文件名添加到最近文件列表的最前面
 			// 移除重复项
 			this.recentFiles = this.recentFiles.filter((f) => f.name !== file.name);
@@ -135,7 +138,7 @@ export default {
 			this.recentFiles.unshift({
 				name: file.name,
 				file: file,
-				path: file.path,
+				path: filePath,
 			});
 
 			if (this.recentFiles.length > 3) {
@@ -145,37 +148,46 @@ export default {
 			// 保存到 localStorage
 			this.saveRecentFiles();
 
-			await this.analyzeFile(file);
+			// 直接传递包含 path 的对象，确保 analyzeFile 能获取到路径
+			await this.analyzeFile({ name: file.name, path: filePath });
 
 			// 清空 input 以便允许重复选择同一文件
 			event.target.value = '';
 		},
 		async analyzeFile(file) {
+			// 尝试获取路径：可能是直接属性，或者是 File 对象通过 API 获取
+			const filePath =
+				file.path ||
+				(window.electronAPI &&
+				window.electronAPI.getFilePath &&
+				file instanceof File
+					? window.electronAPI.getFilePath(file)
+					: null);
+
+			if (!filePath) {
+				console.error('文件路径无效:', file);
+				alert('无法获取文件路径，请重新导入文件');
+				return;
+			}
+
 			this.isAnalyzing = true;
 			this.analysisResult = null;
 
-			const formData = new FormData();
-			formData.append('file', file);
-
 			try {
-				const response = await fetch('http://127.0.0.1:8000/analyze_pdf', {
-					method: 'POST',
-					body: formData,
-				});
+				// 使用 preload.js 暴露的 API 调用主进程
+				// file.path 是 Electron 环境下 File 对象特有的属性，指向磁盘上的真实路径
+				const data = await window.electronAPI.analyzePdf(filePath);
 
-				const data = await response.json();
-
-				if (data.status === 'success') {
-					// 假设后端返回的是一个包含 word 和 translation 的对象数组
-					// 我们给每个对象添加一个 added 状态用于 UI 显示
-					this.analysisResult = data.result.map((item) => ({
-						word: item.word, // 对应后端 key
+				if (data.success) {
+					// 主进程返回结构: { success: true, data: [...] }
+					this.analysisResult = data.data.map((item) => ({
+						word: item.word,
 						translation: item.translation,
-						added: false, // UI 状态控制
+						added: false,
 					}));
 				} else {
-					console.error('分析失败:', data.detail);
-					alert('分析失败: ' + data.detail);
+					console.error('分析失败:', data.error);
+					alert('分析失败: ' + data.error);
 				}
 			} catch (error) {
 				console.error('请求出错:', error);
@@ -196,16 +208,12 @@ export default {
 			if (item.file) {
 				this.analyzeFile(item.file);
 			} else if (item.path) {
-				try {
-					// 尝试通过路径重新加载文件 (适用于 Electron)
-					const response = await fetch(`file://${item.path}`);
-					const blob = await response.blob();
-					const file = new File([blob], item.name, { type: 'application/pdf' });
-					this.analyzeFile(file);
-				} catch (error) {
-					console.error(error);
-					alert('无法自动重新加载文件，请重新导入: ' + item.name);
-				}
+				// 直接传递包含 path 的对象，不需要重新读取文件流
+				// 因为后端只需要路径即可读取文件
+				this.analyzeFile({
+					name: item.name,
+					path: item.path,
+				});
 			} else {
 				alert('无法打开文件，请导入新的 PDF 文件。');
 			}

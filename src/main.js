@@ -53,6 +53,10 @@ const prompt = new PromptTemplate({
 // --- 3. 定义 IPC 处理器 ---
 ipcMain.handle('analyze-pdf', async (event, filePath) => {
 	console.log('收到分析请求，文件路径:', filePath);
+	if (!filePath) {
+		return { success: false, error: '文件路径无效 (undefined)' };
+	}
+
 	try {
 		const loader = new PDFLoader(filePath);
 		const docs = await loader.load();
