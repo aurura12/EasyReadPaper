@@ -1,92 +1,136 @@
-import { app, BrowserWindow } from 'electron';
+// npm start
+
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import started from 'electron-squirrel-startup';
 
-// Try to force-disable GPU as early as possible to avoid spawning GPU process.
-// Some Chromium/Electron builds still spawn a GPU process; append multiple
-// switches to increase chances of avoiding GPU usage on problematic systems.
+// --- 1. 引入 LangChain 相关依赖 ---
+import { ChatOpenAI } from '@langchain/openai';
+import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+import { StructuredOutputParser } from '@langchain/core/output_parsers';
+import { PromptTemplate } from '@langchain/core/prompts';
+import { z } from 'zod';
+
+// 禁用 GPU 配置（保持你原有的）
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-gpu-compositing');
-app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-accelerated-2d-canvas');
-app.commandLine.appendSwitch('disable-accelerated-video-decode');
 app.commandLine.appendSwitch('no-sandbox');
-
 app.disableHardwareAcceleration();
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
 	app.quit();
 }
 
-// --- 后端服务控制逻辑 ---
-let backendProcess = null;
+// --- 2. 配置 AI 逻辑 (取代原来的 backendProcess) ---
+const model = new ChatOpenAI({
+	apiKey: 'sk-1f5b2fe065cc4a6caa62f9f984ffe97a',
+	configuration: {
+		baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+	},
+	modelName: 'qwen-turbo',
+	temperature: 0.3,
+});
 
-const startBackend = () => {
-	const isDev = !app.isPackaged;
-	let scriptPath;
-	let command;
-	let args = [];
+const parser = StructuredOutputParser.fromZodSchema(
+	z.object({
+		words: z.array(
+			z.object({
+				word: z.string().describe('英文单词'),
+				translation: z.string().describe('中文释义'),
+			})
+		),
+	})
+);
 
-	if (isDev) {
-		// 开发模式：直接运行 python 脚本 (api.py 在 backend 目录)
-		// 在 Windows 上优先使用 `py` 启动器，否则使用 `python`
-		command = process.platform === 'win32' ? 'py' : 'python';
-		scriptPath = path.join(process.cwd(), 'backend', 'api.py');
-		args = [scriptPath];
-	} else {
-		// 生产模式：运行打包后的 exe
-		// 注意：你需要配置 electron-builder 将 api_server.exe 复制到 resources 目录
-		const exeName = 'api_server.exe';
-		scriptPath = path.join(process.resourcesPath, exeName);
-		command = scriptPath;
+const prompt = new PromptTemplate({
+	template:
+		'你是一个英语专家。请从以下学术论文片段中提取出6级难度的词汇。\n{format_instructions}\n内容片段：{query}',
+	inputVariables: ['query'],
+	partialVariables: { format_instructions: parser.getFormatInstructions() },
+});
+
+// --- 3. 定义 IPC 处理器 ---
+ipcMain.handle('analyze-pdf', async (event, filePath) => {
+	console.log('收到分析请求，文件路径:', filePath);
+	try {
+		const loader = new PDFLoader(filePath);
+		const docs = await loader.load();
+
+		const textSplitter = new RecursiveCharacterTextSplitter({
+			chunkSize: 2000,
+			chunkOverlap: 200,
+		});
+		const splits = await textSplitter.splitDocuments(docs);
+
+		const allWords = [];
+		const seenWords = new Set();
+		const maxChunks = Math.min(splits.length, 5);
+
+		for (let i = 0; i < maxChunks; i++) {
+			console.log(`正在处理第 ${i + 1}/${maxChunks} 段...`);
+			const input = await prompt.format({ query: splits[i].pageContent });
+			const response = await model.invoke(input);
+
+			try {
+				const chunkResult = await parser.parse(response.content);
+				if (chunkResult.words) {
+					for (const item of chunkResult.words) {
+						const wLower = item.word.toLowerCase();
+						if (!seenWords.has(wLower)) {
+							allWords.push(item);
+							seenWords.add(wLower);
+						}
+					}
+				}
+			} catch (e) {
+				console.error('解析 JSON 失败', e);
+			}
+		}
+		return { success: true, data: allWords };
+	} catch (error) {
+		console.error('AI 处理失败:', error);
+		return { success: false, error: error.message };
 	}
+});
 
-	console.log(`正在启动后端服务: ${command} ${args.join(' ')}`);
-	backendProcess = spawn(command, args);
-
-	backendProcess.stdout.on('data', (data) => {
-		console.log(`Backend: ${data.toString()}`);
-	});
-
-	backendProcess.stderr.on('data', (data) => {
-		console.error(`Backend Error: ${data.toString()}`);
-	});
-};
-
+// --- 4. 窗口生命周期管理 ---
 const createWindow = () => {
-	// Create the browser window.
 	const mainWindow = new BrowserWindow({
-		width: 800,
-		height: 600,
+		width: 1000, // 稍微调宽一点方便看结果
+		height: 800,
 		webPreferences: {
+			// 确保这里的 preload 路径正确
 			preload: path.join(__dirname, 'preload.js'),
+			contextIsolation: true, // 保持开启，增强安全性
+			nodeIntegration: false, // 保持关闭，增强安全性
 		},
 	});
 
-	// and load the index.html of the app.
-	if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-		mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+	// 使用 typeof 检查避免 ReferenceError，兼容开发环境和打包环境
+	const devServerUrl =
+		typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined'
+			? MAIN_WINDOW_VITE_DEV_SERVER_URL
+			: null;
+	const windowName =
+		typeof MAIN_WINDOW_VITE_NAME !== 'undefined'
+			? MAIN_WINDOW_VITE_NAME
+			: 'main_window';
+
+	if (devServerUrl) {
+		mainWindow.loadURL(devServerUrl);
 	} else {
 		mainWindow.loadFile(
-			path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)
+			path.join(__dirname, `../renderer/${windowName}/index.html`)
 		);
 	}
 
-	// Open the DevTools.
 	mainWindow.webContents.openDevTools();
 };
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-	// startBackend(); // 启动后端
 	createWindow();
 
-	// On OS X it's common to re-create a window in the app when the
-	// dock icon is clicked and there are no other windows open.
 	app.on('activate', () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
 			createWindow();
@@ -94,21 +138,8 @@ app.whenReady().then(() => {
 	});
 });
 
-// 退出应用时杀掉 Python 进程
-app.on('will-quit', () => {
-	if (backendProcess) {
-		backendProcess.kill();
-	}
-});
-
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
 	if (process.platform !== 'darwin') {
 		app.quit();
 	}
 });
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.

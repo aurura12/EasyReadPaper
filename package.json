@@ -6,7 +6,7 @@
 	"description": "My Electron application description",
 	"main": ".vite/build/main.js",
 	"scripts": {
-		"start": "electron-forge start",
+		"start": "electron-forge start -- --disable-gpu --no-sandbox",
 		"package": "electron-forge package",
 		"make": "electron-forge make",
 		"publish": "electron-forge publish",
@@ -41,7 +41,13 @@
 		"vite": "^5.4.21"
 	},
 	"dependencies": {
+		"@langchain/community": "^1.1.1",
+		"@langchain/core": "^1.1.8",
+		"@langchain/openai": "^1.2.0",
+		"@langchain/textsplitters": "^1.0.1",
 		"electron-squirrel-startup": "^1.0.1",
-		"vue": "^3.5.26"
+		"pdf-parse": "^2.4.5",
+		"vue": "^3.5.26",
+		"zod": "^4.3.5"
 	}
 }
