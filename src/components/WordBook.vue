@@ -11,6 +11,31 @@
 			/>
 
 			<div class="action-bar">
+				<div class="batch-controls">
+					<label class="select-all-label">
+						<input
+							type="checkbox"
+							:checked="isAllSelected"
+							@change="toggleSelectAll"
+							:disabled="filteredAndSortedWords.length === 0"
+						/>
+						全选
+					</label>
+					<button
+						v-if="selectedWordIds.length > 0"
+						@click="deleteSelected"
+						class="batch-delete-btn"
+					>
+						删除选中 ({{ selectedWordIds.length }})
+					</button>
+					<button
+						v-if="selectedWordIds.length > 0"
+						@click="exportSelected"
+						class="batch-export-btn"
+					>
+						导出选中 ({{ selectedWordIds.length }})
+					</button>
+				</div>
 				<select v-model="sortBy" class="sort-select">
 					<option value="time">按添加时间排序</option>
 					<option value="alpha">按首字母排序</option>
@@ -24,19 +49,29 @@
 				:key="word.id"
 				class="word-item"
 			>
-				<div class="word-content">
-					<div class="word-main">
-						<span class="word-text">{{ word.text }}</span>
-						<button
-							class="speak-btn"
-							@click="speakWord(word.text)"
-							title="点击发音"
-						>
-							🔊
-						</button>
-						<span class="word-translation">{{ word.translation }}</span>
+				<div class="word-left-section">
+					<input
+						type="checkbox"
+						:value="word.id"
+						v-model="selectedWordIds"
+						class="word-checkbox"
+					/>
+					<div class="word-content">
+						<div class="word-main">
+							<span class="word-text">{{ word.text }}</span>
+							<button
+								class="speak-btn"
+								@click="speakWord(word.text)"
+								title="点击发音"
+							>
+								🔊
+							</button>
+							<span class="word-translation">{{ word.translation }}</span>
+						</div>
+						<div class="word-date">
+							添加于: {{ formatDate(word.timestamp) }}
+						</div>
 					</div>
-					<div class="word-date">添加于: {{ formatDate(word.timestamp) }}</div>
 				</div>
 				<button
 					class="delete-btn"
@@ -62,6 +97,7 @@ export default {
 		return {
 			searchQuery: '', // 搜索关键词
 			sortBy: 'time', // 排序规则
+			selectedWordIds: [], // 选中单词的ID列表
 			words: [
 				{
 					id: 1,
@@ -101,6 +137,13 @@ export default {
 				}
 			});
 		},
+		isAllSelected() {
+			if (this.filteredAndSortedWords.length === 0) return false;
+			// 检查当前筛选后的所有单词是否都在选中列表中
+			return this.filteredAndSortedWords.every((word) =>
+				this.selectedWordIds.includes(word.id)
+			);
+		},
 	},
 	watch: {
 		// 深度监听 words 数组的变化
@@ -134,6 +177,51 @@ export default {
 			utterance.lang = 'en-US'; // 设置为美式英语发音
 			window.speechSynthesis.speak(utterance);
 		},
+		toggleSelectAll() {
+			if (this.isAllSelected) {
+				// 取消选中当前列表中的所有单词
+				const currentIds = this.filteredAndSortedWords.map((w) => w.id);
+				this.selectedWordIds = this.selectedWordIds.filter(
+					(id) => !currentIds.includes(id)
+				);
+			} else {
+				// 选中当前列表中的所有单词
+				const currentIds = this.filteredAndSortedWords.map((w) => w.id);
+				this.selectedWordIds = [
+					...new Set([...this.selectedWordIds, ...currentIds]),
+				];
+			}
+		},
+		deleteSelected() {
+			if (
+				confirm(`确定要删除选中的 ${this.selectedWordIds.length} 个单词吗？`)
+			) {
+				this.words = this.words.filter(
+					(word) => !this.selectedWordIds.includes(word.id)
+				);
+				this.selectedWordIds = [];
+			}
+		},
+		exportSelected() {
+			const selectedWords = this.words.filter((word) =>
+				this.selectedWordIds.includes(word.id)
+			);
+			if (selectedWords.length === 0) return;
+
+			// 提取单词文本，用换行符连接
+			const content = selectedWords.map((w) => w.text).join('\n');
+
+			// 创建 Blob 对象并下载
+			const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `words_export_${new Date().toISOString().slice(0, 10)}.txt`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			URL.revokeObjectURL(url);
+		},
 	},
 };
 </script>
@@ -164,6 +252,42 @@ export default {
 	display: flex;
 	justify-content: space-between;
 	gap: 10px;
+	align-items: center;
+}
+
+.batch-controls {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.select-all-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	font-size: 14px;
+	user-select: none;
+}
+
+.batch-delete-btn {
+	background-color: #ff4d4f;
+	color: white;
+	border: none;
+	padding: 6px 12px;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 13px;
+}
+
+.batch-export-btn {
+	background-color: #8179d9;
+	color: white;
+	border: none;
+	padding: 6px 12px;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 13px;
 }
 
 .sort-select,
@@ -187,6 +311,17 @@ export default {
 
 .word-item:hover {
 	background: #f9f9f9;
+}
+
+.word-left-section {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.word-checkbox {
+	cursor: pointer;
+	transform: scale(1.2);
 }
 
 .word-main {
