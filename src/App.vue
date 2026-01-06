@@ -26,8 +26,15 @@
 				<span class="icon">📓</span> 我的单词本
 			</button>
 			<button
+				class="mine-btn"
+				v-if="currentView === 'home'"
+				@click="currentView = 'mine'"
+			>
+				<span class="icon">📊</span> 我的统计
+			</button>
+			<button
 				class="back-btn"
-				v-if="currentView === 'wordbook'"
+				v-if="currentView !== 'home'"
 				@click="currentView = 'home'"
 			>
 				返回首页
@@ -102,10 +109,10 @@
 			</div>
 
 			<!-- 单词本页面 -->
-			<WordBook
-				v-if="currentView === 'wordbook'"
-				@go-home="currentView = 'home'"
-			/>
+			<WordBook v-if="currentView === 'wordbook'" />
+
+			<!-- 我的统计页面 -->
+			<Mine v-if="currentView === 'mine'" />
 		</div>
 
 		<!-- 拖拽覆盖层 -->
@@ -120,11 +127,13 @@
 
 <script>
 import WordBook from './components/WordBook.vue';
+import Mine from './components/Mine.vue';
 
 export default {
 	name: 'HelloWorld',
 	components: {
 		WordBook,
+		Mine,
 	},
 	data() {
 		return {
@@ -142,6 +151,11 @@ export default {
 			return (
 				this.analysisResult && this.analysisResult.every((item) => item.added)
 			);
+		},
+	},
+	watch: {
+		currentView(newVal) {
+			console.log('currentView changed:', newVal);
 		},
 	},
 	created() {
@@ -257,6 +271,7 @@ export default {
 						translation: item.translation,
 						added: false,
 					}));
+					this.recordActivity('analyzed', 1);
 				} else {
 					console.error('分析失败:', data.error);
 					alert('分析失败: ' + data.error);
@@ -318,6 +333,7 @@ export default {
 
 			// 保存回 localStorage
 			localStorage.setItem('my_wordbook_data', JSON.stringify(words));
+			this.recordActivity('added', 1);
 
 			// 更新 UI 状态
 			item.added = true;
@@ -347,9 +363,26 @@ export default {
 			});
 
 			localStorage.setItem('my_wordbook_data', JSON.stringify(words));
+			if (count > 0) {
+				this.recordActivity('added', count);
+			}
 			alert(
 				count > 0 ? `成功导入 ${count} 个新单词！` : '所有单词已在单词本中'
 			);
+		},
+		recordActivity(type, count = 1) {
+			const today = new Date().toISOString().split('T')[0];
+			const saved = localStorage.getItem('user_activity_stats');
+			let stats = saved ? JSON.parse(saved) : {};
+
+			if (!stats[today]) {
+				stats[today] = { added: 0, exported: 0, analyzed: 0 };
+			}
+
+			if (!stats[today][type]) stats[today][type] = 0;
+			stats[today][type] += count;
+
+			localStorage.setItem('user_activity_stats', JSON.stringify(stats));
 		},
 	},
 };
@@ -417,6 +450,26 @@ export default {
 
 .wordbook-btn:hover {
 	background-color: #2980b9;
+}
+
+.mine-btn {
+	background-color: #9b59b6;
+	color: white;
+	border: none;
+	padding: 8px 16px;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 14px;
+	font-weight: 500;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: 12px;
+	transition: background-color 0.2s;
+}
+
+.mine-btn:hover {
+	background-color: #8e44ad;
 }
 
 .back-btn {
