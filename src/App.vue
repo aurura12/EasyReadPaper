@@ -1,5 +1,11 @@
 <template>
-	<div class="main-interface">
+	<div
+		class="main-interface"
+		@dragenter.prevent="handleDragEnter"
+		@dragover.prevent
+		@dragleave.prevent="handleDragLeave"
+		@drop.prevent="handleDrop"
+	>
 		<!-- 顶部工具栏 -->
 		<div class="toolbar">
 			<input
@@ -100,6 +106,14 @@
 				@go-home="currentView = 'home'"
 			/>
 		</div>
+
+		<!-- 拖拽覆盖层 -->
+		<div v-if="isDragging" class="drag-overlay">
+			<div class="drag-content">
+				<span class="icon">📂</span>
+				<p>释放以导入 PDF 文件</p>
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -117,6 +131,8 @@ export default {
 			currentView: 'home',
 			isAnalyzing: false,
 			analysisResult: null,
+			isDragging: false,
+			dragCounter: 0,
 		};
 	},
 	computed: {
@@ -137,14 +153,45 @@ export default {
 		}
 	},
 	methods: {
+		handleDragEnter(e) {
+			this.dragCounter++;
+			this.isDragging = true;
+		},
+		handleDragLeave(e) {
+			this.dragCounter--;
+			if (this.dragCounter <= 0) {
+				this.dragCounter = 0;
+				this.isDragging = false;
+			}
+		},
+		handleDrop(e) {
+			this.dragCounter = 0;
+			this.isDragging = false;
+			const file = e.dataTransfer.files[0];
+			if (file) {
+				if (
+					file.type === 'application/pdf' ||
+					file.name.toLowerCase().endsWith('.pdf')
+				) {
+					this.processFile(file);
+				} else {
+					alert('请导入 PDF 文件');
+				}
+			}
+		},
 		handleImport() {
 			// 触发隐藏的文件输入框点击事件
 			this.$refs.fileInput.click();
 		},
 		async onFileSelected(event) {
 			const file = event.target.files[0];
-			if (!file) return;
-
+			if (file) {
+				await this.processFile(file);
+			}
+			// 清空 input 以便允许重复选择同一文件
+			event.target.value = '';
+		},
+		async processFile(file) {
 			// 获取真实路径 (Electron 环境下需要通过 webUtils 获取)
 			const filePath = window.electronAPI.getFilePath(file);
 
@@ -168,9 +215,6 @@ export default {
 
 			// 直接传递包含 path 的对象，确保 analyzeFile 能获取到路径
 			await this.analyzeFile({ name: file.name, path: filePath });
-
-			// 清空 input 以便允许重复选择同一文件
-			event.target.value = '';
 		},
 		async analyzeFile(file) {
 			// 尝试获取路径：可能是直接属性，或者是 File 对象通过 API 获取
@@ -573,5 +617,38 @@ export default {
 	color: #999;
 	border-color: #ddd;
 	cursor: default;
+}
+
+.drag-overlay {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-color: rgba(255, 255, 255, 0.9);
+	z-index: 1000;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	border: 4px dashed #42b983;
+	box-sizing: border-box;
+}
+
+.drag-content {
+	text-align: center;
+	pointer-events: none;
+}
+
+.drag-content .icon {
+	font-size: 64px;
+	display: block;
+	margin-bottom: 16px;
+}
+
+.drag-content p {
+	font-size: 24px;
+	color: #42b983;
+	font-weight: bold;
+	margin: 0;
 }
 </style>
