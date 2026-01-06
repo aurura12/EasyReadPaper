@@ -40,6 +40,7 @@
 				<div v-if="isAnalyzing" class="loading-state">
 					<div class="spinner">⏳</div>
 					<p>正在分析 PDF 文件，请稍候...</p>
+					<button class="cancel-btn" @click="handleCancelAnalysis">取消</button>
 				</div>
 				<div v-else-if="analysisResult" class="result-state">
 					<h3>分析结果</h3>
@@ -133,6 +134,7 @@ export default {
 			analysisResult: null,
 			isDragging: false,
 			dragCounter: 0,
+			currentAnalysisId: 0,
 		};
 	},
 	computed: {
@@ -191,6 +193,10 @@ export default {
 			// 清空 input 以便允许重复选择同一文件
 			event.target.value = '';
 		},
+		handleCancelAnalysis() {
+			this.isAnalyzing = false;
+			this.currentAnalysisId++; // 使当前的分析请求失效，防止后续回调覆盖状态
+		},
 		async processFile(file) {
 			// 获取真实路径 (Electron 环境下需要通过 webUtils 获取)
 			const filePath = window.electronAPI.getFilePath(file);
@@ -232,6 +238,7 @@ export default {
 				return;
 			}
 
+			const analysisId = ++this.currentAnalysisId;
 			this.isAnalyzing = true;
 			this.analysisResult = null;
 
@@ -239,6 +246,9 @@ export default {
 				// 使用 preload.js 暴露的 API 调用主进程
 				// file.path 是 Electron 环境下 File 对象特有的属性，指向磁盘上的真实路径
 				const data = await window.electronAPI.analyzePdf(filePath);
+
+				// 如果 ID 不匹配，说明用户已经取消或开始了新的分析，直接忽略结果
+				if (analysisId !== this.currentAnalysisId) return;
 
 				if (data.success) {
 					// 主进程返回结构: { success: true, data: [...] }
@@ -252,10 +262,14 @@ export default {
 					alert('分析失败: ' + data.error);
 				}
 			} catch (error) {
+				if (analysisId !== this.currentAnalysisId) return;
 				console.error('请求出错:', error);
 				alert('请求出错: ' + error.message);
 			} finally {
-				this.isAnalyzing = false;
+				// 只有当这是当前最新的分析任务时，才关闭 loading 状态
+				if (analysisId === this.currentAnalysisId) {
+					this.isAnalyzing = false;
+				}
 			}
 		},
 		saveRecentFiles() {
@@ -522,6 +536,22 @@ export default {
 	100% {
 		transform: rotate(360deg);
 	}
+}
+
+.cancel-btn {
+	margin-top: 16px;
+	padding: 8px 24px;
+	background-color: #e74c3c;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 14px;
+	transition: background-color 0.2s;
+}
+
+.cancel-btn:hover {
+	background-color: #c0392b;
 }
 
 .word-cards-container {
