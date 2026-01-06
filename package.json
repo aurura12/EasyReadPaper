@@ -1,7 +1,7 @@
 {
 	"name": "easy-read-paper",
 	"productName": "easy-read-paper",
-	"version": "1.0.0",
+	"version": "1.0.4",
 	"icon": "src/assets/icon/app",
 	"description": "My Electron application description",
 	"main": ".vite/build/main.js",
@@ -29,7 +29,7 @@
 		"@electron-forge/plugin-vite": "^7.10.2",
 		"@electron/fuses": "^1.8.0",
 		"@vitejs/plugin-vue": "^6.0.3",
-		"electron": "^39.2.7",
+		"electron": "^33.0.0",
 		"vite": "^5.4.21"
 	},
 	"dependencies": {

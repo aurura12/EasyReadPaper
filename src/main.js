@@ -2,7 +2,7 @@
 
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
-import started from 'electron-squirrel-startup';
+import squirrelStartup from 'electron-squirrel-startup';
 
 // --- 1. 引入 LangChain 相关依赖 ---
 import { ChatOpenAI } from '@langchain/openai';
@@ -12,19 +12,24 @@ import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { z } from 'zod';
 
+if (squirrelStartup) {
+	// 如果是 Squirrel 安装过程中的管理事件，直接退出应用
+	app.quit();
+	process.exit(0); // 确保完全退出
+}
+
 // 禁用 GPU 配置（保持你原有的）
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-gpu-compositing');
 app.commandLine.appendSwitch('no-sandbox');
 app.disableHardwareAcceleration();
 
-if (started) {
-	app.quit();
-}
+// 如果需要处理 Squirrel 安装事件，可在外部脚本运行时处理。为避免打包时因模块解析问题导致崩溃，移除此处的静态引用。
 
 // --- 2. 配置 AI 逻辑 (取代原来的 backendProcess) ---
 const model = new ChatOpenAI({
-	apiKey: 'sk-1f5b2fe065cc4a6caa62f9f984ffe97a',
+	apiKey:
+		process.env.DASHSCOPE_API_KEY || 'sk-1f5b2fe065cc4a6caa62f9f984ffe97a',
 	configuration: {
 		baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
 	},
