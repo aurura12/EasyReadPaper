@@ -49,8 +49,15 @@ const parser = StructuredOutputParser.fromZodSchema(
 );
 
 const prompt = new PromptTemplate({
-	template:
-		'你是一个英语专家。请从以下学术论文片段中提取出6级难度的词汇。\n{format_instructions}\n内容片段：{query}',
+	template: `你是一个英语专家，精通大学英语6级词汇体系。请严格按照以下要求执行：
+1. 仅从下方学术论文片段中提取**单个**的6级难度英语词汇（禁止提取短语、词组、复合词，如"take care"、"break down"、"high-tech"均不允许）；
+2. 提取的词汇需是独立的单词，仅包含英文字母，无连字符、空格、数字或符号；
+3. 优先提取核心实词（名词、动词、形容词、副词），避免提取冠词、介词、连词等基础词汇；
+4. 确保提取的词汇符合大学英语6级考试大纲难度，不包含4级及以下、考研/托福等超纲词汇；
+5. 若片段中无符合要求的6级词汇，返回空列表即可，无需编造。
+
+{format_instructions}
+内容片段：{query}`,
 	inputVariables: ['query'],
 	partialVariables: { format_instructions: parser.getFormatInstructions() },
 });
